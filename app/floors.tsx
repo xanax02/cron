@@ -75,18 +75,16 @@ export default function FloorsScreen() {
     
     // Speak the selection for screen reader users
     if (isScreenReaderEnabled && isSpeechAvailable) {
-      Speech.speak(`Selected ${floor.name} in ${building}. Starting navigation.`, {
+      Speech.speak(`Selected ${floor.name} in ${building}. Setting up navigation.`, {
         language: 'en',
         pitch: 1.0,
         rate: 0.9,
       });
     }
     
-    // Navigate to the navigation screen with building and floor info
-    // For now, we'll just go back to the home screen
-    // TODO: Replace with actual navigation screen when implemented
+    // Navigate to the navigation setup screen with building and floor info
     router.push({
-      pathname: '/',
+      pathname: '/navigation',
       params: { building, floor: floor.id, floorName: floor.name }
     });
   };
