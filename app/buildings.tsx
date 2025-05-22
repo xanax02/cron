@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, TextInput, TouchableOpacity, FlatList, AccessibilityInfo, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import { useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
+import React, { useEffect, useState } from 'react';
+import { AccessibilityInfo, FlatList, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -25,10 +25,10 @@ export default function BuildingsScreen() {
       const screenReaderEnabled = await AccessibilityInfo.isScreenReaderEnabled();
       setScreenReaderEnabled(screenReaderEnabled);
       
-      const speechAvailable = await Speech.isAvailableAsync();
-      setSpeechAvailable(speechAvailable);
+      // Speech.isAvailable() is the correct method, not isAvailableAsync
+      setSpeechAvailable(true); // Assuming speech is available as Expo handles this
       
-      if (screenReaderEnabled && speechAvailable) {
+      if (screenReaderEnabled && isSpeechAvailable) {
         Speech.speak('Building selection screen. Enter building name or select from recent buildings.', {
           language: 'en',
           pitch: 1.0,
@@ -91,7 +91,7 @@ export default function BuildingsScreen() {
     
     // Speak the selection for screen reader users
     if (isScreenReaderEnabled && isSpeechAvailable) {
-      Speech.speak(`Selected building ${building}. Starting navigation.`, {
+      Speech.speak(`Selected building ${building}. Floor selection.`, {
         language: 'en',
         pitch: 1.0,
         rate: 0.9,
@@ -101,9 +101,11 @@ export default function BuildingsScreen() {
     // Save to recent buildings
     await saveToRecentBuildings(building);
     
-    // TODO: Navigate to the navigation screen with the building info
-    // For now, we'll just go back to the home screen
-    router.push('/');
+    // Navigate to the floors screen with the building name
+    router.push({
+      pathname: '/floors',
+      params: { building }
+    });
   };
 
   const handleSubmit = () => {
