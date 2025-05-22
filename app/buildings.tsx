@@ -6,6 +6,8 @@ import * as Speech from 'expo-speech';
 import React, { useEffect, useState } from 'react';
 import { AccessibilityInfo, FlatList, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 
+import availableData from '@/utils/availableBuildings';
+
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 
@@ -15,6 +17,8 @@ const MAX_RECENT_BUILDINGS = 5;
 export default function BuildingsScreen() {
   const [buildingName, setBuildingName] = useState('');
   const [recentBuildings, setRecentBuildings] = useState<string[]>([]);
+  const [filteredBuildings, setFilteredBuildings] = useState<string[]>([]);
+  const [availableBuildings] = useState<string[]>(Object.keys(availableData));
   const [isSpeechAvailable, setSpeechAvailable] = useState(false);
   const [isScreenReaderEnabled, setScreenReaderEnabled] = useState(false);
   const router = useRouter();
@@ -108,9 +112,40 @@ export default function BuildingsScreen() {
     });
   };
 
+  // Filter buildings based on input
+  const filterBuildings = (text: string) => {
+    setBuildingName(text);
+    
+    if (text.trim() === '') {
+      setFilteredBuildings([]);
+      return;
+    }
+    
+    const filtered = availableBuildings.filter(building => 
+      building.toLowerCase().includes(text.toLowerCase())
+    );
+    setFilteredBuildings(filtered);
+  };
+  
   const handleSubmit = () => {
     if (buildingName.trim()) {
-      handleBuildingSelect(buildingName);
+      // Check if the input matches any available building
+      const matchedBuilding = availableBuildings.find(
+        building => building.toLowerCase() === buildingName.toLowerCase()
+      );
+      
+      if (matchedBuilding) {
+        handleBuildingSelect(matchedBuilding);
+      } else if (filteredBuildings.length > 0) {
+        // If there's a partial match, select the first result
+        handleBuildingSelect(filteredBuildings[0]);
+      } else if (isScreenReaderEnabled && isSpeechAvailable) {
+        Speech.speak('No matching building found. Please try again.', {
+          language: 'en',
+          pitch: 1.0,
+          rate: 0.9,
+        });
+      }
     } else if (isScreenReaderEnabled && isSpeechAvailable) {
       Speech.speak('Please enter a building name', {
         language: 'en',
@@ -141,7 +176,7 @@ export default function BuildingsScreen() {
           style={styles.input}
           placeholder="Enter building name"
           value={buildingName}
-          onChangeText={setBuildingName}
+          onChangeText={filterBuildings}
           accessibilityLabel="Enter building name"
           accessibilityHint="Type the name of the building you want to navigate"
           onFocus={() => speakText('Enter building name')}
@@ -157,10 +192,43 @@ export default function BuildingsScreen() {
         </TouchableOpacity>
       </ThemedView>
 
+      {/* Search Results */}
+      {filteredBuildings.length > 0 && (
+        <ThemedView style={styles.searchResultsContainer}>
+          <ThemedText 
+            type="subtitle" 
+            style={styles.sectionTitle}
+            accessibilityRole="header"
+          >
+            Search Results
+          </ThemedText>
+          
+          <FlatList
+            data={filteredBuildings}
+            keyExtractor={(item) => item}
+            renderItem={({ item }) => (
+              <TouchableOpacity 
+                style={styles.buildingItem}
+                onPress={() => handleBuildingSelect(item)}
+                accessibilityLabel={`Select ${item}`}
+                accessibilityHint={`Tap to navigate to ${item}`}
+                accessibilityRole="button"
+                onAccessibilityTap={() => speakText(`${item}`)}
+              >
+                <Ionicons name="business-outline" size={20} color="#555" style={styles.itemIcon} />
+                <ThemedText>{item}</ThemedText>
+              </TouchableOpacity>
+            )}
+            style={styles.resultsList}
+          />
+        </ThemedView>
+      )}
+      
+      {/* Recently Used */}
       <ThemedView style={styles.recentContainer}>
         <ThemedText 
           type="subtitle" 
-          style={styles.recentTitle}
+          style={styles.sectionTitle}
           accessibilityRole="header"
         >
           Recently Used
@@ -179,7 +247,7 @@ export default function BuildingsScreen() {
             keyExtractor={(item, index) => index.toString()}
             renderItem={({ item }) => (
               <TouchableOpacity 
-                style={styles.recentItem}
+                style={styles.buildingItem}
                 onPress={() => handleBuildingSelect(item)}
                 accessibilityLabel={`Select ${item}`}
                 accessibilityHint={`Tap to navigate to ${item}`}
@@ -210,7 +278,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   input: {
     flex: 1,
@@ -231,16 +299,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 8,
   },
+  sectionTitle: {
+    marginBottom: 12,
+  },
+  searchResultsContainer: {
+    marginBottom: 16,
+  },
+  resultsList: {
+    maxHeight: 200,
+  },
   recentContainer: {
     flex: 1,
-  },
-  recentTitle: {
-    marginBottom: 12,
   },
   recentList: {
     flex: 1,
   },
-  recentItem: {
+  buildingItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,

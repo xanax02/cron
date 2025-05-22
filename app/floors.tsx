@@ -5,25 +5,49 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 
+import availableData from '@/utils/availableBuildings';
+
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 
-// Mock data for floors - in a real app, this could come from an API based on the building
+// Define the type for building data
+type BuildingData = {
+  floors: string[];
+  mappedFloors: string[];
+};
+
+// Create a type-safe version of availableData
+const getBuildingData = (buildingName: string): BuildingData | undefined => {
+  // We need to check if the building exists in our data
+  if (buildingName in availableData) {
+    return availableData[buildingName as keyof typeof availableData];
+  }
+  return undefined;
+};
+
+// Get floors for a building from the availableBuildings data
 const getFloorsForBuilding = (buildingName: string) => {
-  // This is just mock data, in a real app this would be fetched from a server
-  // based on the building name
-  return [
-    { id: '1', name: 'Ground Floor' },
-    { id: '2', name: '1st Floor' },
-    { id: '3', name: '2nd Floor' },
-    { id: '4', name: '3rd Floor' },
-    { id: '5', name: '4th Floor' }
-  ];
+  // Check if the building exists in our data
+  const buildingData = getBuildingData(buildingName);
+  
+  if (buildingData) {
+    const mappedFloors = new Set(buildingData.mappedFloors);
+    
+    // Convert floors to the format needed and mark if they're mapped
+    return buildingData.floors.map((floor: string, index: number) => ({
+      id: index.toString(),
+      name: floor,
+      isMapped: mappedFloors.has(floor)
+    }));
+  }
+  
+  // Return empty array if building not found
+  return [];
 };
 
 export default function FloorsScreen() {
   const { building } = useLocalSearchParams();
-  const [floors, setFloors] = useState<{ id: string; name: string }[]>([]);
+  const [floors, setFloors] = useState<{ id: string; name: string; isMapped: boolean }[]>([]);
   const [isSpeechAvailable, setSpeechAvailable] = useState(false);
   const [isScreenReaderEnabled, setScreenReaderEnabled] = useState(false);
   const router = useRouter();
@@ -69,7 +93,23 @@ export default function FloorsScreen() {
     };
   }, [building]);
 
-  const handleFloorSelect = (floor: { id: string; name: string }) => {
+  const handleFloorSelect = (floor: { id: string; name: string; isMapped: boolean }) => {
+    // Only proceed if the floor is mapped
+    if (!floor.isMapped) {
+      // Provide haptic feedback to indicate not allowed
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      
+      // Inform user this floor isn't mapped yet
+      if (isScreenReaderEnabled && isSpeechAvailable) {
+        Speech.speak(`${floor.name} is not yet mapped for navigation in ${building}.`, {
+          language: 'en',
+          pitch: 1.0,
+          rate: 0.9,
+        });
+      }
+      return;
+    }
+    
     // Provide haptic feedback
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     
@@ -138,15 +178,24 @@ export default function FloorsScreen() {
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <TouchableOpacity 
-                style={styles.floorItem}
+                style={[styles.floorItem, !item.isMapped && styles.floorItemDisabled]}
                 onPress={() => handleFloorSelect(item)}
-                accessibilityLabel={`Select ${item.name}`}
-                accessibilityHint={`Double tap to navigate to ${item.name} in ${building}`}
+                accessibilityLabel={`${item.name}${!item.isMapped ? ', not mapped yet' : ''}`}
+                accessibilityHint={item.isMapped 
+                  ? `Double tap to navigate to ${item.name} in ${building}` 
+                  : `This floor is not yet mapped for navigation`
+                }
                 accessibilityRole="button"
-                onAccessibilityTap={() => speakText(`${item.name}`)}
+                disabled={!item.isMapped}
+                onAccessibilityTap={() => speakText(`${item.name}${!item.isMapped ? ', not mapped yet' : ''}`)}
               >
-                <View style={styles.floorIconContainer}>
-                  <Ionicons name="layers-outline" size={24} color="#555" style={styles.itemIcon} />
+                <View style={[styles.floorIconContainer, !item.isMapped && styles.floorIconDisabled]}>
+                  <Ionicons 
+                    name={item.isMapped ? "layers-outline" : "alert-circle-outline"} 
+                    size={24} 
+                    color={item.isMapped ? "#555" : "#999"} 
+                    style={styles.itemIcon} 
+                  />
                 </View>
                 <ThemedView style={styles.floorTextContainer}>
                   <ThemedText type="defaultSemiBold">{item.name}</ThemedText>
@@ -203,6 +252,10 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
+  floorItemDisabled: {
+    backgroundColor: '#f9f9f9',
+    opacity: 0.7,
+  },
   floorIconContainer: {
     width: 40,
     height: 40,
@@ -211,6 +264,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
+  },
+  floorIconDisabled: {
+    backgroundColor: '#e5e5e5',
   },
   floorTextContainer: {
     flex: 1,
