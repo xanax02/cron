@@ -10,19 +10,34 @@ import { Picker } from '@react-native-picker/picker';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 
-// Import navigation utilities
+// Import navigation utilities and available buildings data
+import { availableData } from '@/utils/availableBuildings';
+import { setCurrentBuilding } from '@/utils/navigationUtils';
 
-// This would normally come from a backend based on building and floor
-const getLocations = (building: string, floor: string) => {
-  // Mock locations - in a real app, this would be fetched from a backend
-  return [
-    'Entrance',
-    'Hall',
-    'Kitchen',
-    'Balcony',
-    'Room1',
-    'WashroomR1',
-  ];
+// Define types for building data structure
+type Coordinates = { x: number; y: number };
+type BuildingData = {
+  floors: string[];
+  mappedFloors: string[];
+  navigator?: string[];
+  nodes?: Record<string, Coordinates>;
+  edges?: Record<string, string[]>;
+};
+
+// Get locations from the selected building and floor in availableBuildings.js
+const getLocations = (building: string, floor: string): string[] => {
+  // Check if the building exists in our data
+  if (building in availableData) {
+    const buildingData = availableData[building as keyof typeof availableData] as BuildingData;
+    
+    // If the building has a navigator array, use it
+    if (buildingData.navigator && Array.isArray(buildingData.navigator)) {
+      return buildingData.navigator;
+    }
+  }
+  
+  // Fallback to empty array if building not found or has no navigator data
+  return [];
 };
 
 export default function NavigationScreen() {
@@ -34,7 +49,7 @@ export default function NavigationScreen() {
   const [isScreenReaderEnabled, setScreenReaderEnabled] = useState(false);
   const router = useRouter();
 
-  // Check accessibility settings
+  // Check accessibility settings and set up navigation data
   useEffect(() => {
     const checkAccessibility = async () => {
       const screenReaderEnabled = await AccessibilityInfo.isScreenReaderEnabled();
@@ -59,16 +74,38 @@ export default function NavigationScreen() {
     
     // Load locations for the selected building and floor
     if (building && floor) {
+      // Set the current building's navigation data (nodes and edges)
+      const buildingConfigured = setCurrentBuilding(building as string);
+      
+      // Get available locations for the selected building
       const locationsList = getLocations(building as string, floor as string);
       setLocations(locationsList);
       
       // Set defaults
       if (locationsList.length > 0) {
-        setSource(locationsList[0]);
+        setSource(locationsList[0]); // Default to first location as source
+        
+        // Try to set a destination that is different from the source
         if (locationsList.length > 1) {
           setDestination(locationsList[1]);
         } else {
           setDestination(locationsList[0]);
+        }
+        
+        // Provide feedback about available locations
+        if (isScreenReaderEnabled && isSpeechAvailable) {
+          Speech.speak(
+            `${locationsList.length} locations available for navigation.${!buildingConfigured ? ' Using default navigation map.' : ''}`,
+            { language: 'en', pitch: 1.0, rate: 0.9 }
+          );
+        }
+      } else {
+        // Provide feedback if no locations are available
+        if (isScreenReaderEnabled && isSpeechAvailable) {
+          Speech.speak(
+            `No navigation points available for this floor.`,
+            { language: 'en', pitch: 1.0, rate: 0.9 }
+          );
         }
       }
     }

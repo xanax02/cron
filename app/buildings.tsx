@@ -6,7 +6,7 @@ import * as Speech from 'expo-speech';
 import React, { useEffect, useState } from 'react';
 import { AccessibilityInfo, FlatList, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 
-import availableData from '@/utils/availableBuildings';
+import { availableData } from '@/utils/availableBuildings';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
