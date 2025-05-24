@@ -4,7 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as Speech from 'expo-speech';
 import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Dimensions, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
-// @ts-ignore - We've added the package but TypeScript may need time to recognize it
+
+import VisionAssistance from '@/components/VisionAssistance';
 
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
@@ -64,7 +65,7 @@ const getRelativeDirection = (from: {x: number, y: number}, to: {x: number, y: n
   }
 };
 
-const getPathDescription = (path: string[], nodes) => {
+const getPathDescription = (path: string[], nodes: any) => {
   if (!path || path.length < 2) return ['No valid path found'];
   
   const directions = [];
@@ -110,6 +111,9 @@ export default function DirectionsScreen() {
   const [isScreenReaderEnabled, setScreenReaderEnabled] = useState(false);
   const scrollViewRef = useRef<ScrollView | null>(null);
   const router = useRouter();
+  
+  // Vision assistance state
+  const [cameraActive, setCameraActive] = useState(false);
 
   const windowWidth = Dimensions.get('window').width - 32; // Padding on both sides
   const windowHeight = 300; // Fixed height for map view
@@ -134,8 +138,9 @@ export default function DirectionsScreen() {
         console.log(calculatedPath);
         
         // Get textual directions from the path
-        // @ts-ignore - We know the imported function has this property
-        const textDirections = getPathDescription(calculatedPath, findShortestPath.nodes);
+                // Using findShortestPath with nodes property
+        const pathNodes = (findShortestPath as any).nodes;
+        const textDirections = getPathDescription(calculatedPath, pathNodes);
         setDirections(textDirections);
         
         // Speak the first direction for screen reader users
@@ -166,6 +171,14 @@ export default function DirectionsScreen() {
       }
     };
   }, [source, destination, isScreenReaderEnabled, isSpeechAvailable]);
+
+
+  
+  // Function to check accessibility settings
+  const checkAccessibility = async () => {
+    const screenReaderEnabled = await AccessibilityInfo.isScreenReaderEnabled();
+    setScreenReaderEnabled(screenReaderEnabled);
+  };
 
   // Function to speak the current direction
   const speakCurrentDirection = () => {
@@ -232,6 +245,11 @@ export default function DirectionsScreen() {
     }
   };
 
+  // Handle vision assistance status change
+  const handleVisionAssistanceStatusChange = (isActive: boolean) => {
+    setCameraActive(isActive);
+  };
+  
   // Calculate map scaling and translation
   const calculateMapTransform = () => {
     if (!path || path.length === 0) return { scale: 1, translateX: 0, translateY: 0 };
@@ -243,7 +261,8 @@ export default function DirectionsScreen() {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     
     path.forEach(nodeId => {
-      const node = nodes[nodeId];
+      // Using type assertion to handle string indexing
+      const node = nodes[nodeId as keyof typeof nodes];
       minX = Math.min(minX, node.x);
       minY = Math.min(minY, node.y);
       maxX = Math.max(maxX, node.x);
@@ -416,6 +435,13 @@ export default function DirectionsScreen() {
         <Ionicons name="volume-high" size={20} color="white" style={styles.buttonIcon} />
         <ThemedText style={styles.buttonText}>Repeat Instruction</ThemedText>
       </TouchableOpacity>
+      
+      {/* Vision assistance component */}
+      <VisionAssistance 
+        isScreenReaderEnabled={isScreenReaderEnabled}
+        isSpeechAvailable={isSpeechAvailable}
+        onStatusChange={handleVisionAssistanceStatusChange}
+      />
     </ThemedView>
   );
 }
@@ -532,5 +558,38 @@ const styles = StyleSheet.create({
   },
   buttonIcon: {
     marginRight: 8,
+  },
+  cameraButton: {
+    backgroundColor: '#FF5722',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  cameraButtonActive: {
+    backgroundColor: '#D32F2F',
+  },
+  cameraContainer: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginTop: 8,
+    position: 'relative',
+  },
+  camera: {
+    flex: 1,
+  },
+  directionOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
