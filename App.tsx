@@ -19,6 +19,7 @@ import BuildingsScreen from './screens/BuildingsScreen';
 import FloorsScreen from './screens/FloorsScreen';
 import NavigationScreen from './screens/NavigationScreen';
 import YellowTapeTracker from './screens/YellowTapeTracker';
+import TextSpeechScreen from './screens/TextSpeechScreen';
 
 // Define types for the navigation stack
 export type RootStackParamList = {
@@ -26,6 +27,7 @@ export type RootStackParamList = {
   Floors: { building: string };
   Navigation: { building: string; floor: string };
   YellowTapeTracker: { building: string; floor: string; directions: string[] };
+  TextSpeech: undefined; // Add new screen route type
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -65,7 +67,7 @@ function App(): React.JSX.Element {
       />
       <NavigationContainer>
         <Stack.Navigator
-          initialRouteName="Buildings"
+          initialRouteName="TextSpeech"
           screenOptions={{
             headerStyle: {
               backgroundColor: isDarkMode ? '#121212' : '#f8f8f8',
@@ -103,6 +105,13 @@ function App(): React.JSX.Element {
               headerShown: false // Hide header for full camera experience
             }} 
           />
+          {/* New screen to test TTS and STT */}
+          <Stack.Screen
+            name="TextSpeech"
+            component={TextSpeechScreen}
+            options={{ title: 'Test Screen - TTS and STT' }}
+          />
+
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
