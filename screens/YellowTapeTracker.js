@@ -10,8 +10,9 @@ import {
   NativeModules,
   TouchableOpacity
 } from 'react-native';
-import { Camera, useCameraDevice } from 'react-native-vision-camera';
+import { Camera, useCameraDevice, useCodeScanner } from 'react-native-vision-camera';
 import Icon from 'react-native-vector-icons/Ionicons';
+import Tts from 'react-native-tts';
 
 // Import the QRScanner component
 import QRScanner from '../components/QRScanner';
@@ -28,11 +29,12 @@ const YellowTapeTracker = ({ navigation, route }) => {
   const [direction, setDirection] = useState('Searching for yellow tape...');
   const [isProcessing, setIsProcessing] = useState(false);
   const [confidence, setConfidence] = useState(0);
-  const [showQRScanner, setShowQRScanner] = useState(false);
   const [currentLocation, setCurrentLocation] = useState(null);
   const [qrData, setQrData] = useState(null);
   const [currentBuilding, setCurrentBuilding] = useState(route?.params?.building || null);
   const [destination, setDestination] = useState(route?.params?.destination || null);
+  const [destinationReached, setDestinationReached] = useState(false);
+  const [qrScanCooldown, setQrScanCooldown] = useState(false);
   const device = useCameraDevice('back');
 
   // Reference to last processing time to throttle processing
@@ -45,8 +47,24 @@ const YellowTapeTracker = ({ navigation, route }) => {
       setHasPermission(cameraPermission);
     })();
     
-    return () => {};
+    // Initialize TTS
+    Tts.setDefaultRate(0.5); // Slower speech rate
+    Tts.setDefaultPitch(1.0);
+    
+    return () => {
+      Tts.stop();
+    };
   }, []);
+  
+  // Setup code scanner for QR codes
+  const codeScanner = useCodeScanner({
+    codeTypes: ['qr'],
+    onCodeScanned: (codes) => {
+      if (!qrScanCooldown && codes.length > 0 && codes[0].value) {
+        handleQRCode(codes[0].value);
+      }
+    }
+  });
 
   // Process frame to detect yellow tape using native module
   const processFrame = async (base64Image) => {
@@ -123,6 +141,68 @@ const YellowTapeTracker = ({ navigation, route }) => {
       return () => clearInterval(simulationInterval);
     }
   }, [hasPermission, isProcessing]);
+  
+  // Handle QR code data
+  const handleQRCode = (data) => {
+    try {
+      // Set cooldown to prevent multiple scans
+      setQrScanCooldown(true);
+      
+      // Parse QR data
+      if (data.includes(':')) {
+        const [building, location] = data.split(':');
+        
+        if (building && location) {
+          // Update location
+          setQrData(data);
+          setCurrentLocation(location);
+          
+          // Speak the current location
+          Tts.speak(`You are at ${location}`);
+          
+          // Check if destination reached
+          if (destination && location === destination) {
+            setDestinationReached(true);
+            setDirection(`You have reached ${destination}`);
+            setConfidence(100);
+            
+            // Speak destination reached message
+            Tts.speak(`You have reached your destination, ${destination}`);
+            
+            // Navigate back to NavigationScreen after 3 seconds
+            setTimeout(() => {
+              navigation.navigate('NavigationScreen', { 
+                successMessage: `Successfully navigated to ${destination}` 
+              });
+            }, 3000);
+          } else if (destination) {
+            // Calculate directions to destination
+            const directions = getDirections(location, destination);
+            if (directions && directions.length > 0) {
+              setDirection(directions[0]);
+              setConfidence(95);
+            }
+          } else {
+            setDirection(`Location detected: ${location}`);
+            setConfidence(100);
+          }
+        }
+      } else {
+        // Simple QR code
+        setQrData(data);
+        setDirection(`QR code detected: ${data}`);
+        setConfidence(90);
+      }
+      
+      // Reset cooldown after delay
+      setTimeout(() => {
+        setQrScanCooldown(false);
+      }, 2000);
+    } catch (error) {
+      console.error('QR processing error:', error);
+      setQrScanCooldown(false);
+    }
+  };
   
   // Simulate yellow tape detection - including "keep steady" when tape is in the box
   const simulateYellowTapeDetection = () => {
@@ -204,6 +284,7 @@ const YellowTapeTracker = ({ navigation, route }) => {
               style={styles.camera}
               device={device}
               isActive={true}
+              codeScanner={codeScanner}
             />
             {/* Vertical frame indicator */}
             <View style={styles.frameIndicator}>
@@ -229,47 +310,29 @@ const YellowTapeTracker = ({ navigation, route }) => {
             <Text style={styles.locationText}>Current location: {currentLocation}</Text>
           )}
           
+          {destination && (
+            <Text style={styles.destinationText}>Destination: {destination}</Text>
+          )}
+          
           {qrData && (
             <Text style={styles.qrDataText}>Last QR: {qrData}</Text>
           )}
+          
+          {destinationReached && (
+            <View style={styles.destinationReachedContainer}>
+              <Text style={styles.destinationReachedText}>🎉 Destination Reached! 🎉</Text>
+            </View>
+          )}
         </View>
-        
-        {/* QR Scanner Toggle Button */}
-        <TouchableOpacity 
-          style={styles.qrButton}
-          onPress={() => setShowQRScanner(true)}
-        >
-          <Icon name="qr-code-outline" size={24} color="white" />
-          <Text style={styles.qrButtonText}>Scan QR Code</Text>
-        </TouchableOpacity>
       </View>
       
-      {/* QR Scanner Modal */}
-      {showQRScanner && (
-        <QRScanner 
-          onLocationDetected={(data) => {
-            // Handle QR scan result
-            setCurrentLocation(data.location);
-            setQrData(data.qrData);
-            
-            // If we have directions from the QR scan, update them
-            if (data.directions && data.directions.length > 0) {
-              setDirection(data.directions[0]);
-              setConfidence(95);
-            } else {
-              setDirection(`Location detected: ${data.location}`);
-              setConfidence(100);
-            }
-            
-            // Close QR scanner after successful scan
-            setShowQRScanner(false);
-          }}
-          onClose={() => setShowQRScanner(false)}
-          navigation={navigation}
-          currentBuilding={currentBuilding}
-          destination={destination}
-        />
-      )}
+      {/* QR Scanner Crosshair Overlay */}
+      <View style={styles.qrScannerOverlay}>
+        <View style={styles.scanCorner} />
+        <View style={[styles.scanCorner, styles.topRight]} />
+        <View style={[styles.scanCorner, styles.bottomLeft]} />
+        <View style={[styles.scanCorner, styles.bottomRight]} />
+      </View>
     </SafeAreaView>
   );
 };
@@ -378,22 +441,70 @@ const styles = StyleSheet.create({
     marginTop: 5,
     textAlign: 'center',
   },
-  qrButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    marginTop: 10,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#FFF',
+  destinationText: {
+    color: '#ADD8E6', // Light blue color
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
   },
-  qrButtonText: {
-    color: 'white',
-    marginLeft: 8,
+  destinationReachedContainer: {
+    backgroundColor: 'rgba(0,255,0,0.2)',
+    padding: 10,
+    borderRadius: 5,
+    marginTop: 10,
+  },
+  destinationReachedText: {
+    color: '#00FF00', // Bright green color
+    fontSize: 16,
     fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  qrScannerOverlay: {
+    position: 'absolute',
+    top: height * 0.3,
+    left: width * 0.15,
+    width: width * 0.7,
+    height: width * 0.7,
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.5)',
+    backgroundColor: 'transparent',
+    zIndex: 30,
+  },
+  scanCorner: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderColor: '#FFF',
+    top: -2,
+    left: -2,
+    borderTopWidth: 4,
+    borderLeftWidth: 4,
+  },
+  topRight: {
+    top: -2,
+    right: -2,
+    left: undefined,
+    borderTopWidth: 4,
+    borderRightWidth: 4,
+    borderLeftWidth: 0,
+  },
+  bottomLeft: {
+    top: undefined,
+    bottom: -2,
+    left: -2,
+    borderBottomWidth: 4,
+    borderLeftWidth: 4,
+    borderTopWidth: 0,
+  },
+  bottomRight: {
+    top: undefined,
+    right: -2,
+    bottom: -2,
+    left: undefined,
+    borderBottomWidth: 4,
+    borderRightWidth: 4,
+    borderTopWidth: 0,
+    borderLeftWidth: 0,
   },
 });
 
