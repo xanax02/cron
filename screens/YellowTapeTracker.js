@@ -13,15 +13,26 @@ import {
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
 import Icon from 'react-native-vector-icons/Ionicons';
 
+// Import the QRScanner component
+import QRScanner from '../components/QRScanner';
+
+// Import navigation utilities
+import { getDirections, setCurrentBuilding, findShortestPath } from '../utils/navigationUtils';
+
 // Access the native YellowTapeDetector module if available
 const YellowTapeDetector = NativeModules.YellowTapeDetector || null;
 const isDetectorAvailable = YellowTapeDetector !== null;
 
-const YellowTapeTracker = ({ navigation }) => {
+const YellowTapeTracker = ({ navigation, route }) => {
   const [hasPermission, setHasPermission] = useState(false);
   const [direction, setDirection] = useState('Searching for yellow tape...');
   const [isProcessing, setIsProcessing] = useState(false);
   const [confidence, setConfidence] = useState(0);
+  const [showQRScanner, setShowQRScanner] = useState(false);
+  const [currentLocation, setCurrentLocation] = useState(null);
+  const [qrData, setQrData] = useState(null);
+  const [currentBuilding, setCurrentBuilding] = useState(route?.params?.building || null);
+  const [destination, setDestination] = useState(route?.params?.destination || null);
   const device = useCameraDevice('back');
 
   // Reference to last processing time to throttle processing
@@ -213,8 +224,52 @@ const YellowTapeTracker = ({ navigation }) => {
         <View style={styles.directionContainer}>
           <Text style={styles.directionText}>{direction}</Text>
           <Text style={styles.confidenceText}>Confidence: {confidence}%</Text>
+          
+          {currentLocation && (
+            <Text style={styles.locationText}>Current location: {currentLocation}</Text>
+          )}
+          
+          {qrData && (
+            <Text style={styles.qrDataText}>Last QR: {qrData}</Text>
+          )}
         </View>
+        
+        {/* QR Scanner Toggle Button */}
+        <TouchableOpacity 
+          style={styles.qrButton}
+          onPress={() => setShowQRScanner(true)}
+        >
+          <Icon name="qr-code-outline" size={24} color="white" />
+          <Text style={styles.qrButtonText}>Scan QR Code</Text>
+        </TouchableOpacity>
       </View>
+      
+      {/* QR Scanner Modal */}
+      {showQRScanner && (
+        <QRScanner 
+          onLocationDetected={(data) => {
+            // Handle QR scan result
+            setCurrentLocation(data.location);
+            setQrData(data.qrData);
+            
+            // If we have directions from the QR scan, update them
+            if (data.directions && data.directions.length > 0) {
+              setDirection(data.directions[0]);
+              setConfidence(95);
+            } else {
+              setDirection(`Location detected: ${data.location}`);
+              setConfidence(100);
+            }
+            
+            // Close QR scanner after successful scan
+            setShowQRScanner(false);
+          }}
+          onClose={() => setShowQRScanner(false)}
+          navigation={navigation}
+          currentBuilding={currentBuilding}
+          destination={destination}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -310,6 +365,35 @@ const styles = StyleSheet.create({
     fontSize: 18,
     textAlign: 'center',
     margin: 20,
+  },
+  locationText: {
+    color: '#7FFF00', // Light green color
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  qrDataText: {
+    color: '#FFD700', // Gold color
+    fontSize: 12,
+    marginTop: 5,
+    textAlign: 'center',
+  },
+  qrButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    marginTop: 10,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#FFF',
+  },
+  qrButtonText: {
+    color: 'white',
+    marginLeft: 8,
+    fontWeight: 'bold',
   },
 });
 
