@@ -138,11 +138,11 @@ function findShortestPath(start, end) {
     }
   }
   
-  // Calculate path description with distances and accurate turns
+  // Calculate path description with distances and accurate turns, returning a map of node to direction info
   function getPathDescription(path, nodeMap) {
-    if (!path || path.length < 2) return ['No valid path found'];
+    if (!path || path.length < 2) return {};
     
-    const directions = [];
+    const directionMap = {};
     
     // First movement - no previous direction to reference
     if (path.length >= 2) {
@@ -155,7 +155,14 @@ function findShortestPath(start, end) {
       ).toFixed(1);
       
       const initialDirection = getRelativeDirection(nodeMap[first], nodeMap[second]);
-      directions.push(`From ${first}, go ${initialDirection} for approximately ${distance} meters to reach ${second}`);
+      
+      // Store direction info for first node
+      directionMap[first] = {
+        direction: initialDirection,
+        distance: distance,
+        nextNode: second,
+        directionText: `Go ${initialDirection}`
+      };
     }
     
     // For subsequent points, we can determine relative direction
@@ -170,10 +177,28 @@ function findShortestPath(start, end) {
       ).toFixed(1);
       
       const direction = getRelativeDirection(nodeMap[current], nodeMap[next], nodeMap[prev]);
-      directions.push(`At ${current}, turn ${direction} and go approximately ${distance} meters to reach ${next}`);
+      
+      // Store direction info for current node
+      directionMap[current] = {
+        direction: direction,
+        distance: distance,
+        nextNode: next,
+        directionText: `Turn ${direction}`
+      };
     }
     
-    return directions;
+    // Add the destination node
+    if (path.length > 1) {
+      const destination = path[path.length - 1];
+      directionMap[destination] = {
+        direction: 'destination',
+        distance: 0,
+        nextNode: null,
+        directionText: 'You have reached your destination'
+      };
+    }
+    
+    return directionMap;
   }
   
   // Main function with accurate directions for yellow tape tracking
@@ -181,7 +206,7 @@ function findShortestPath(start, end) {
     // Get the path from start to end
     const path = findShortestPath(start, end);
     
-    // Use the new path description function
+    // Use the new path description function to get direction map
     return getPathDescription(path, nodes);
   }
   

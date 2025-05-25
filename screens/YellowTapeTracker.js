@@ -32,9 +32,12 @@ const YellowTapeTracker = ({ navigation, route }) => {
   const [currentLocation, setCurrentLocation] = useState(null);
   const [qrData, setQrData] = useState(null);
   const [currentBuilding, setCurrentBuilding] = useState(route?.params?.building || null);
+  const [source, setSource] = useState(route?.params?.source || 'Entrance');
   const [destination, setDestination] = useState(route?.params?.destination || null);
   const [destinationReached, setDestinationReached] = useState(false);
   const [qrScanCooldown, setQrScanCooldown] = useState(false);
+  // Get directions map directly from route params
+  const [directionsMap, setDirectionsMap] = useState(route?.params?.directions || {});
   const device = useCameraDevice('back');
 
   // Reference to last processing time to throttle processing
@@ -51,10 +54,19 @@ const YellowTapeTracker = ({ navigation, route }) => {
     Tts.setDefaultRate(0.5); // Slower speech rate
     Tts.setDefaultPitch(1.0);
     
+    // Log available directions for debugging
+    if (route?.params?.directions) {
+      console.log('Directions received from NavigationScreen:', JSON.stringify(route.params.directions));
+    } else if (currentBuilding && source && destination) {
+      // If no directions provided, calculate them (fallback)
+      console.log(`No directions provided, calculating from ${source} to ${destination}`);
+      calculateDirectionsMap(source, destination);
+    }
+    
     return () => {
       Tts.stop();
     };
-  }, []);
+  }, [currentBuilding, source, destination, route?.params?.directions]);
   
   // Setup code scanner for QR codes
   const codeScanner = useCodeScanner({
@@ -142,11 +154,36 @@ const YellowTapeTracker = ({ navigation, route }) => {
     }
   }, [hasPermission, isProcessing]);
   
+  // Get directions map from the navigation utilities
+  const calculateDirectionsMap = (start, end) => {
+    try {
+      // Make sure we have the correct building data loaded
+      if (currentBuilding) {
+        setCurrentBuilding(currentBuilding);
+      }
+      
+      // Get the direction map directly from getDirections
+      const directions = getDirections(start, end);
+      console.log('Directions map created:', JSON.stringify(directions));
+      
+      // Make sure directions is not empty before setting it
+      if (directions && Object.keys(directions).length > 0) {
+        setDirectionsMap(directions);
+      } else {
+        console.error('Directions map is empty or invalid');
+      }
+    } catch (error) {
+      console.error('Error calculating directions map:', error);
+    }
+  };
+  
   // Handle QR code data
   const handleQRCode = (data) => {
     try {
       // Set cooldown to prevent multiple scans
       setQrScanCooldown(true);
+      console.log('QR Code detected:', data);
+      console.log('Current directionsMap:', JSON.stringify(directionsMap));
       
       // Parse QR data
       if (data.includes(':')) {
@@ -156,18 +193,15 @@ const YellowTapeTracker = ({ navigation, route }) => {
           // Update location
           setQrData(data);
           setCurrentLocation(location);
-          
-          // Speak the current location
-          Tts.speak(`You are at ${location}`);
+          console.log(`Current location: ${location}, Destination: ${destination}`);
           
           // Check if destination reached
           if (destination && location === destination) {
             setDestinationReached(true);
-            setDirection(`You have reached ${destination}`);
-            setConfidence(100);
             
             // Speak destination reached message
             Tts.speak(`You have reached your destination, ${destination}`);
+            console.log('Destination reached');
             
             // Navigate back to NavigationScreen after 3 seconds
             setTimeout(() => {
@@ -175,25 +209,68 @@ const YellowTapeTracker = ({ navigation, route }) => {
                 successMessage: `Successfully navigated to ${destination}` 
               });
             }, 3000);
-          } else if (destination) {
-            // Calculate directions to destination
-            const directions = getDirections(location, destination);
-            if (directions && directions.length > 0) {
-              setDirection(directions[0]);
-              setConfidence(95);
+          } 
+          // Provide audio direction for this node
+          else if (directionsMap && directionsMap[location]) {
+            const dirInfo = directionsMap[location];
+            console.log('Direction info for location:', JSON.stringify(dirInfo));
+            
+            // Create a directional message based on the node data
+            let directionText = '';
+            
+            // Check if the direction info contains all required properties
+            if (dirInfo.direction && dirInfo.nextNode) {
+              // Construct a more detailed direction message
+              if (dirInfo.direction === 'destination') {
+                directionText = `You are near your destination. Proceed straight ahead to reach ${destination}.`;
+              } else {
+                // Create a more user-friendly direction with distance
+                const distanceText = dirInfo.distance ? `about ${dirInfo.distance} meters` : '';
+                directionText = `You are at ${location}. Turn ${dirInfo.direction} ${distanceText} towards ${dirInfo.nextNode}.`;
+              }
+            } else if (typeof dirInfo === 'string') {
+              // Handle case where dirInfo might just be a string
+              directionText = `You are at ${location}. ${dirInfo}`;
+            } else {
+              // Fallback if direction info is incomplete
+              directionText = `You are at ${location}. ${dirInfo.directionText || 'Continue following the yellow tape.'}`;
             }
-          } else {
-            setDirection(`Location detected: ${location}`);
-            setConfidence(100);
+            
+            // Speak the direction
+            console.log('Speaking direction:', directionText);
+            Tts.speak(directionText);
+            
+            // Update UI state
+            setDirection('Follow the yellow tape');
+            setConfidence(95);
+          } 
+          else {
+            // Just announce the current location
+            const locationMessage = `You are at ${location}. Continue following the yellow tape.`;
+            console.log('Speaking location only:', locationMessage);
+            Tts.speak(locationMessage);
+            setDirection('Follow the yellow tape');
+            setConfidence(90);
           }
         }
       } else {
         // Simple QR code
         setQrData(data);
-        setDirection(`QR code detected: ${data}`);
+        // Tts.speak(`QR code detected: ${directionsMap[data].direction}`);
+        if(directionsMap[data].direction === 'destination') {
+          setDestinationReached(true);
+          Tts.speak(`You have reached your destination, ${destination}`);
+        }
+        else if(directionsMap[data].direction === 'left' || 'right') {
+          Tts.speak(`QR code detected: Turn ${directionsMap[data].direction}`);
+        }
+        else if(directionsMap[data].direction === 'straight') {
+          Tts.speak(`QR code detected: Go straight`);
+        }
+        setDirection('Follow the yellow tape');
         setConfidence(90);
       }
-      
+       
       // Reset cooldown after delay
       setTimeout(() => {
         setQrScanCooldown(false);
@@ -270,11 +347,13 @@ const YellowTapeTracker = ({ navigation, route }) => {
         <TouchableOpacity 
           style={styles.backButton}
           onPress={() => navigation.goBack()}
-          accessibilityLabel="Go back"
+          accessibilityLabel="Back button"
         >
           <Icon name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Yellow Tape Tracker</Text>
+        <Text style={styles.headerTitle}>{
+          destination ? `Navigating to: ${destination}` : (currentBuilding || 'Yellow Tape Tracker')
+        }</Text>
       </View>
       
       <View style={styles.cameraContainer}>
@@ -312,10 +391,6 @@ const YellowTapeTracker = ({ navigation, route }) => {
           
           {destination && (
             <Text style={styles.destinationText}>Destination: {destination}</Text>
-          )}
-          
-          {qrData && (
-            <Text style={styles.qrDataText}>Last QR: {qrData}</Text>
           )}
           
           {destinationReached && (

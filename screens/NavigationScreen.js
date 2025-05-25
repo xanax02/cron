@@ -89,10 +89,12 @@ const NavigationScreen = ({ route, navigation }) => {
   };
 
   const navigateToYellowTapeTracker = () => {
+    // Navigate to YellowTapeTracker with the building, source and destination
     navigation.navigate('YellowTapeTracker', { 
-      building, 
-      floor,
-      directions
+      building: building,
+      destination: endPoint,
+      source: startPoint,
+      directions: directions
     });
   };
 
@@ -113,8 +115,7 @@ const NavigationScreen = ({ route, navigation }) => {
         </ThemedText>
       </ThemedView>
 
-      {!isDirectionsVisible ? (
-        <>
+      
           <ThemedView style={styles.selectionContainer}>
             <ThemedText type="subtitle" style={styles.selectionTitle}>
               {isSelectingStart ? "Select Start Point" : "Select Destination"}
@@ -145,6 +146,14 @@ const NavigationScreen = ({ route, navigation }) => {
                 </ThemedText>
               </TouchableOpacity>
             </ThemedView>
+            <TouchableOpacity 
+            style={styles.startNavigationButton}
+            onPress={navigateToYellowTapeTracker}
+            accessibilityLabel="Start navigation with Yellow Tape"
+          >
+            <Icon name="navigate" size={20} color="#FFFFFF" style={styles.startNavigationIcon} />
+            <ThemedText style={styles.startNavigationText}>Start Navigation</ThemedText>
+          </TouchableOpacity>
           </ThemedView>
 
           <FlatList
@@ -170,49 +179,7 @@ const NavigationScreen = ({ route, navigation }) => {
             style={styles.locationsList}
             contentContainerStyle={styles.locationsListContent}
           />
-        </>
-      ) : (
-        <>
-          <ThemedView style={styles.directionsHeader}>
-            <ThemedView style={styles.directionsPoints}>
-              <ThemedText style={styles.directionsPointText}>
-                <ThemedText style={styles.boldText}>From: </ThemedText>
-                {startPoint}
-              </ThemedText>
-              <ThemedText style={styles.directionsPointText}>
-                <ThemedText style={styles.boldText}>To: </ThemedText>
-                {endPoint}
-              </ThemedText>
-            </ThemedView>
-            <TouchableOpacity 
-              style={styles.resetButton}
-              onPress={resetNavigation}
-              accessibilityLabel="Reset navigation"
-            >
-              <Icon name="refresh" size={18} color="#007AFF" />
-              <ThemedText style={styles.resetButtonText}>Reset</ThemedText>
-            </TouchableOpacity>
-          </ThemedView>
-          
-          <ScrollView style={styles.directionsContainer}>
-            {directions.map((direction, index) => (
-              <ThemedView key={index} style={styles.directionItem}>
-                <ThemedText style={styles.directionNumber}>{index + 1}</ThemedText>
-                <ThemedText style={styles.directionText}>{direction}</ThemedText>
-              </ThemedView>
-            ))}
-          </ScrollView>
-          
-          <TouchableOpacity 
-            style={styles.startNavigationButton}
-            onPress={navigateToYellowTapeTracker}
-            accessibilityLabel="Start navigation with Yellow Tape"
-          >
-            <Icon name="navigate" size={20} color="#FFFFFF" style={styles.startNavigationIcon} />
-            <ThemedText style={styles.startNavigationText}>Start Navigation</ThemedText>
-          </TouchableOpacity>
-        </>
-      )}
+       
     </ThemedView>
   );
 };
@@ -359,6 +326,24 @@ const styles = StyleSheet.create({
   directionText: {
     flex: 1,
     fontSize: 16,
+  },
+  directionSummary: {
+    backgroundColor: '#f8f8f8',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  directionSummaryText: {
+    fontSize: 16,
+    marginBottom: 8,
+    fontWeight: 'bold',
+  },
+  directionNote: {
+    fontSize: 14,
+    color: '#666',
+    fontStyle: 'italic',
   },
   startNavigationButton: {
     flexDirection: 'row',
