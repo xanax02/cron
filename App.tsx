@@ -1,130 +1,119 @@
 /**
- * Sample React Native App
- * https://github.com/facebook/react-native
+ * Yellow Tape Navigation App
+ * Tracks yellow tape using camera and provides indoor navigation
  *
  * @format
  */
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { StyleSheet, StatusBar, useColorScheme, Text, View } from 'react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+// Import navigation utilities
+import { setCurrentBuilding } from './utils/navigationUtils';
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+// Import existing screens
+import BuildingsScreen from './screens/BuildingsScreen';
+import FloorsScreen from './screens/FloorsScreen';
+import NavigationScreen from './screens/NavigationScreen';
+import YellowTapeTracker from './screens/YellowTapeTracker';
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-  return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
+// Define types for the navigation stack
+export type RootStackParamList = {
+  Buildings: undefined;
+  Floors: { building: string };
+  Navigation: { building: string; floor: string };
+  YellowTapeTracker: { building: string; floor: string; directions: string[] };
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 function App(): React.JSX.Element {
   const isDarkMode = useColorScheme() === 'dark';
-
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
-
-  /*
-   * To keep the template simple and small we're adding padding to prevent view
-   * from rendering under the System UI.
-   * For bigger apps the recommendation is to use `react-native-safe-area-context`:
-   * https://github.com/AppAndFlow/react-native-safe-area-context
-   *
-   * You can read more about it here:
-   * https://github.com/react-native-community/discussions-and-proposals/discussions/827
-   */
-  const safePadding = '5%';
+  const [isAppReady, setIsAppReady] = useState(false);
+  
+  // Set up app on initial load
+  useEffect(() => {
+    const initializeApp = async () => {
+      // Set default building
+      setCurrentBuilding('MainBuilding');
+      
+      // Any other initialization tasks here
+      
+      setIsAppReady(true);
+    };
+    
+    initializeApp();
+  }, []);
+  
+  if (!isAppReady) {
+    // Simple loading screen
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: isDarkMode ? '#000' : '#fff' }]}>
+        <Text style={{ color: isDarkMode ? '#fff' : '#000' }}>Loading...</Text>
+      </View>
+    );
+  }
 
   return (
-    <View style={backgroundStyle}>
+    <SafeAreaProvider>
       <StatusBar
         barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
+        backgroundColor={isDarkMode ? '#000' : '#fff'}
       />
-      <ScrollView
-        style={backgroundStyle}>
-        <View style={{paddingRight: safePadding}}>
-          <Header/>
-        </View>
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-            paddingHorizontal: safePadding,
-            paddingBottom: safePadding,
+      <NavigationContainer>
+        <Stack.Navigator
+          initialRouteName="Buildings"
+          screenOptions={{
+            headerStyle: {
+              backgroundColor: isDarkMode ? '#121212' : '#f8f8f8',
+            },
+            headerTintColor: isDarkMode ? '#fff' : '#000',
+            headerTitleStyle: {
+              fontWeight: 'bold',
+            },
+            animation: 'slide_from_right',
           }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </View>
+          <Stack.Screen 
+            name="Buildings" 
+            component={BuildingsScreen} 
+            options={{ title: 'Select Building' }} 
+          />
+          <Stack.Screen 
+            name="Floors" 
+            component={FloorsScreen}
+            options={({ route }) => ({ 
+              title: route.params?.building || 'Select Floor' 
+            })} 
+          />
+          <Stack.Screen 
+            name="Navigation" 
+            component={NavigationScreen}
+            options={({ route }) => ({ 
+              title: `${route.params?.building} - ${route.params?.floor}` 
+            })} 
+          />
+          <Stack.Screen 
+            name="YellowTapeTracker" 
+            component={YellowTapeTracker}
+            options={{ 
+              title: 'Yellow Tape Tracker',
+              headerShown: false // Hide header for full camera experience
+            }} 
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
-  },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
